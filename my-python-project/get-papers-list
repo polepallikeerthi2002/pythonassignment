@@ -1,0 +1,123 @@
+#!/usr/bin/env python
+import argparse
+import requests
+import csv
+from typing import List, Dict
+from xml.etree import ElementTree
+
+from papers.fetch_papers import fetch_papers, save_to_csv
+
+EMAIL = "keerthipolepalli570@gmail.com"
+TOOL = "get-papers-list"
+BASE_URL = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/"
+
+HEADERS = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:118.0) Gecko/20100101 Firefox/118.0"
+}
+
+
+def fetch_papers(query: str, max_results: int = 100) -> List[Dict]:
+    try:
+        search_params = {
+            "db": "pubmed",
+            "term": query,
+            "retmax": max_results,
+            "tool": TOOL,
+            "email": EMAIL
+        }
+        search_resp = requests.get(BASE_URL + "esearch.fcgi", params=search_params, headers=HEADERS)
+        search_resp.raise_for_status()
+        id_list = ElementTree.fromstring(search_resp.text).find("IdList")
+        pmids = [id_elem.text for id_elem in id_list.findall("Id")]
+    except Exception as e:
+        print(f"❌ Error querying PubMed: {e}")
+        return []
+
+    results = []
+    for pmid in pmids:
+        try:
+            fetch_params = {
+                "db": "pubmed",
+                "id": pmid,
+                "retmode": "xml",
+                "tool": TOOL,
+                "email": EMAIL
+            }
+            fetch_resp = requests.get(BASE_URL + "efetch.fcgi", params=fetch_params, headers=HEADERS)
+            fetch_resp.raise_for_status()
+            root = ElementTree.fromstring(fetch_resp.text)
+            article = root.find(".//Article")
+            if article is None:
+                continue
+
+            title = article.findtext("ArticleTitle", "")
+            pub_date = root.findtext(".//PubDate/Year", "")
+
+            non_academic = []
+            company_affiliations = []
+            emails = []
+
+            for affil_elem in root.findall(".//AffiliationInfo/Affiliation"):
+                affil = affil_elem.text or ""
+                company_affiliations.append(affil)
+                if any(x in affil.lower() for x in ["pharma", "biotech", "inc", "ltd", "corp", "gmbh"]):
+                    author_elem = affil_elem.find("../../LastName")
+                    if author_elem is not None:
+                        non_academic.append(author_elem.text)
+                if "@" in affil:
+                    emails.append(affil)
+
+            results.append({
+                "PubmedID": pmid,
+                "Title": title,
+                "Publication Date": pub_date,
+                "NonAcademic Authors": "; ".join(non_academic),
+                "Company Affiliations": "; ".join(company_affiliations),
+                "Corresponding Author Email": "; ".join(emails)
+            })
+
+        except Exception as e:
+            print(f"⚠️  Error parsing paper {pmid}: {e}")
+            continue
+
+    return results
+
+
+def save_to_csv(results: List[Dict], filename: str):
+    if not results:
+        print("⚠️  No results to save.")
+        return
+    try:
+        keys = results[0].keys()
+        with open(filename, "w", newline="", encoding="utf-8") as f:
+            dict_writer = csv.DictWriter(f, keys)
+            dict_writer.writeheader()
+            dict_writer.writerows(results)
+        print(f"✅ Results saved to {filename}")
+    except Exception as e:
+        print(f"❌ Failed to write CSV: {e}")
+
+
+def main():
+    parser = argparse.ArgumentParser(
+        description="Fetch PubMed papers with pharma/biotech affiliations and output to CSV."
+    )
+    parser.add_argument("--source", required=True, help="PubMed query string")
+    parser.add_argument("--output", default="results.csv", help="Output CSV filename")
+    parser.add_argument("--max", type=int, default=100, help="Max results to fetch")
+    parser.add_argument("--debug", action="store_true", help="Print debug info")
+    args = parser.parse_args()
+
+    if args.debug:
+        print(f"Query: {args.source}")
+        print(f"Output: {args.output}")
+        print(f"Max results: {args.max}")
+
+    results = fetch_papers(args.source, max_results=args.max)
+    if args.debug:
+        print(f"Fetched {len(results)} papers")
+    save_to_csv(results, args.output)
+
+
+if __name__ == "__main__":
+    main()
