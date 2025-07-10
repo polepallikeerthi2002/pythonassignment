@@ -1,11 +1,9 @@
-# papers/fetch_papers.py
-
 from typing import List, Dict
 import requests
 from xml.etree import ElementTree
 import csv
 
-EMAIL = "your_email@example.com"
+EMAIL = "keethipolepalli570@gamil.com"
 TOOL = "get-papers-list"
 BASE_URL = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/"
 HEADERS = {"User-Agent": "get-papers-list/1.0"}
@@ -77,3 +75,10 @@ def save_to_csv(results: List[Dict], filename: str):
         dict_writer = csv.DictWriter(f, keys)
         dict_writer.writeheader()
         dict_writer.writerows(results)
+
+if __name__ == "__main__":
+    # Example usage
+    query = "cancer"
+    results = fetch_papers(query, max_results=10)
+    save_to_csv(results, "papers.csv")
+    print(f"Saved {len(results)} papers to papers.csv")

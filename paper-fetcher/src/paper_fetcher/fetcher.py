@@ -1,3 +1,9 @@
+from paper_fetcher.fetcher import Fetcher
+
+if __name__ == "__main__":
+    fetcher = Fetcher("arxiv")
+    fetcher.fetch_papers()
+    
 class Fetcher:
     def __init__(self, source):
         self.source = source
