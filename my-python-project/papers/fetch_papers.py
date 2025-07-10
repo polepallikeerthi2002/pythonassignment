@@ -2,8 +2,9 @@ from typing import List, Dict
 import requests
 from xml.etree import ElementTree
 import csv
+import argparse
 
-EMAIL = "keethipolepalli570@gamil.com"
+EMAIL = "keerthipolepalli570@gamil.com"
 TOOL = "get-papers-list"
 BASE_URL = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/"
 HEADERS = {"User-Agent": "get-papers-list/1.0"}
@@ -77,8 +78,12 @@ def save_to_csv(results: List[Dict], filename: str):
         dict_writer.writerows(results)
 
 if __name__ == "__main__":
-    # Example usage
-    query = "cancer"
-    results = fetch_papers(query, max_results=10)
-    save_to_csv(results, "papers.csv")
-    print(f"Saved {len(results)} papers to papers.csv")
+    parser = argparse.ArgumentParser(description="Fetch papers from PubMed")
+    parser.add_argument("query", type=str, help="Search query")
+    parser.add_argument("--max", type=int, default=10, help="Maximum number of results")
+    parser.add_argument("--output", type=str, default="papers.csv", help="Output CSV filename")
+    args = parser.parse_args()
+
+    results = fetch_papers(args.query, max_results=args.max)
+    save_to_csv(results, args.output)
+    print(f"Saved {len(results)} papers to {args.output}")
